@@ -1,0 +1,4 @@
+# Exclude CSV data files by default -- these one-off tools work against
+# exports that often contain customer / employee / work-order data.
+# Override per-file with `git add -f` if a CSV is genuinely public.
+*.csv
