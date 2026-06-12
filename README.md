@@ -17,3 +17,4 @@ data. Override per-file with `git add -f` only when a CSV is genuinely public.
 | [`uipath-repo-cleanup/`](uipath-repo-cleanup/) | Add a UiPath `.gitignore` to each repo under a root and untrack generated/cache files. |
 | [`jobpac-pm-mismatch-job/`](jobpac-pm-mismatch-job/) | Daily SQL Agent job: check/fix the project manager on Jobpac (DB2/400) work orders, via a linked server. |
 | [`azure-gpv1-storage-migration/`](azure-gpv1-storage-migration/) | Response to Azure GPv1 storage retirement (XTKT-BW8, 13 Oct 2026). **Done 2026-06-12:** all 5 GPv1 accounts upgraded in place to GPv2; zero GPv1 remain. Fail-closed PowerShell scripts. |
+| [`sentinel-sourcecontrol-api-retirement/`](sentinel-sourcecontrol-api-retirement/) | Response to Azure Sentinel SourceControls API retirement (15 Jun 2026). **Investigation only, 2026-06-12:** the one repo connection is Trustwave-owned + pre-existing (exempt); no Higgins automation creates connections. **No action required.** |
