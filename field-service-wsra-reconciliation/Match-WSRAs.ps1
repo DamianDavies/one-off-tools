@@ -72,13 +72,17 @@ param(
 # --- Column names -------------------------------------------------------
 # VERIFY these against your actual export headers before trusting a run.
 
-# HOW export (wsras.csv)
+# HOW export (wsras.csv). The SSMS grid save has NO header row, so we supply
+# the column names explicitly (order matches Export-WSRAs-from-HOW.sql). If a
+# header row IS present, it's harmless -- its created_at won't parse and the
+# row is skipped.
+$WsraHeader   = @('Job_Code','Form_Record_Id','Form_Status','created_at','started_at','completed_at','Form_Name')
 $WsJobCol     = 'Job_Code'
 $WsStatusCol  = 'Form_Status'
 $WsCreatedCol = 'created_at'
 
 # Dynamics work orders export (wos.csv)
-$WoIdCol      = '(Do Not Modify) Work Order'   # the GUID, for the bulk update
+$WoIdCol      = '(Do Not Modify) WO Number'    # the GUID, for the bulk update
 $WoNameCol    = 'Work Order Number'            # msdyn_name, starts with the job code e.g. "JM0075 ..."
 $WoFlagCol    = 'Risk Assessment Complete'     # hig_riskassessmentcomplete
 $WoDateCol    = 'Date Window Start'
@@ -96,7 +100,14 @@ $SkipStatuses = @('Unscheduled')
 $BkWoCol      = 'Work Order'        # lookup text = the WO's msdyn_name
 $BkStartCol   = 'Start Time'
 $BkStatusCol  = 'Booking Status'
+$BkResourceCol = 'Resource'
 $CancelledStatuses = @('Canceled','Cancelled')
+
+# Placeholder resources mark future maintenance years that aren't really
+# scheduled yet (e.g. "Placeholder - Geelong", "Place Holders"). Bookings on
+# these are ignored when dating a WO -- a WO whose ONLY bookings are
+# placeholders is treated as not yet scheduled (NotScheduled bucket).
+$PlaceholderResourcePattern = 'Placeholder|Place Holder'
 
 # How many leading characters of the WO name identify the job (Jobpac codes
 # are 2 letters + 4 digits, e.g. JM0075). This also makes "JM0075A ..." match
@@ -145,7 +156,7 @@ function Get-JobCode {
 
 # --- Load started WSRAs from HOW ----------------------------------------
 Write-Host "Loading WSRAs: $WsrasCsv" -ForegroundColor Cyan
-$wsRows = Import-Csv -Path $WsrasCsv
+$wsRows = Import-Csv -Path $WsrasCsv -Header $WsraHeader
 
 $wsraByJob = @{}
 $wsParsed = 0; $wsSkipped = 0
@@ -165,11 +176,12 @@ foreach ($r in $wsRows) {
 Write-Host ("  Parsed {0} started WSRAs ({1} skipped) across {2} job codes." -f $wsParsed, $wsSkipped, $wsraByJob.Keys.Count)
 
 # --- Load bookings (optional) -------------------------------------------
-$bookingsByWo = @{}
+$bookingsByWo  = @{}    # real (non-placeholder) bookings, for dating
+$anyBookingWos = @{}    # every WO that has any non-cancelled booking, incl. placeholder
 if (Test-Path $BookingsCsv) {
     Write-Host "Loading bookings: $BookingsCsv" -ForegroundColor Cyan
     $bkRows = Import-Csv -Path $BookingsCsv
-    $bkUsed = 0; $bkCancel = 0; $bkOther = 0
+    $bkUsed = 0; $bkPlace = 0; $bkCancel = 0; $bkOther = 0
     foreach ($bk in $bkRows) {
         $woName = $bk.$BkWoCol
         $start  = ConvertTo-AuDate $bk.$BkStartCol
@@ -177,13 +189,16 @@ if (Test-Path $BookingsCsv) {
         $hasStatus = $bk.PSObject.Properties.Name -contains $BkStatusCol
         if ($hasStatus -and ($CancelledStatuses -contains $bk.$BkStatusCol)) { $bkCancel++; continue }
         $key = $woName.Trim()
+        $anyBookingWos[$key] = $true
+        $resource = if ($bk.PSObject.Properties.Name -contains $BkResourceCol) { $bk.$BkResourceCol } else { '' }
+        if ($resource -and $resource -match $PlaceholderResourcePattern) { $bkPlace++; continue }
         if (-not $bookingsByWo.ContainsKey($key)) {
             $bookingsByWo[$key] = New-Object System.Collections.Generic.List[datetime]
         }
         $bookingsByWo[$key].Add($start)
         $bkUsed++
     }
-    Write-Host ("  Parsed {0} bookings across {1} WOs ({2} cancelled, {3} other skipped)." -f $bkUsed, $bookingsByWo.Keys.Count, $bkCancel, $bkOther)
+    Write-Host ("  Parsed {0} real bookings across {1} WOs ({2} placeholder, {3} cancelled, {4} other skipped)." -f $bkUsed, $bookingsByWo.Keys.Count, $bkPlace, $bkCancel, $bkOther)
 } else {
     Write-Host "No bookings.csv at $BookingsCsv -- using Date Window Start for all rows." -ForegroundColor Yellow
 }
@@ -228,13 +243,26 @@ foreach ($wo in $woRows) {
         $results.Add([pscustomobject]$row); continue
     }
 
-    # WO date: earliest non-cancelled booking, else Date Window Start.
+    # WO date: earliest non-cancelled REAL (non-placeholder) booking. A WO whose
+    # only bookings are placeholders is a future maintenance year not really
+    # scheduled yet -> NotScheduled. A WO with no bookings at all falls back to
+    # Date Window Start.
+    $key = $woName.Trim()
     $bookingDate = $null
-    if ($bookingsByWo.ContainsKey($woName.Trim())) {
-        $bookingDate = ($bookingsByWo[$woName.Trim()] | Sort-Object | Select-Object -First 1)
+    if ($bookingsByWo.ContainsKey($key)) {
+        $bookingDate = ($bookingsByWo[$key] | Sort-Object | Select-Object -First 1)
     }
-    if ($bookingDate) { $woDate = $bookingDate; $row.DateSource = 'Booking' }
-    else              { $woDate = ConvertTo-AuDate $wo.$WoDateCol; $row.DateSource = 'DateWindowStart' }
+    if ($bookingDate) {
+        $woDate = $bookingDate; $row.DateSource = 'Booking'
+    }
+    elseif ($anyBookingWos.ContainsKey($key)) {
+        $row.DateSource = 'PlaceholderOnly'
+        $row.Match = 'NotScheduled'
+        $results.Add([pscustomobject]$row); continue
+    }
+    else {
+        $woDate = ConvertTo-AuDate $wo.$WoDateCol; $row.DateSource = 'DateWindowStart'
+    }
 
     if (-not $woDate) {
         $row.DateSource = 'None'
@@ -282,6 +310,7 @@ Write-Host ("  Already complete  : {0}" -f ($results | Where-Object Match -eq 'A
 Write-Host ("  Expired           : {0}  (review -- WSRA outside 12-month window)" -f ($results | Where-Object Match -eq 'Expired').Count)
 Write-Host ("  No WSRA           : {0}  (genuinely not started)" -f ($results | Where-Object Match -eq 'NoWSRA').Count)
 Write-Host ("  No WO date        : {0}  (review)" -f ($results | Where-Object Match -eq 'NoWoDate').Count)
+Write-Host ("  Not scheduled     : {0}  (placeholder-only bookings -- future maintenance years)" -f ($results | Where-Object Match -eq 'NotScheduled').Count)
 Write-Host ("  Unscheduled       : {0}  (skipped)" -f ($results | Where-Object Match -eq 'Unscheduled').Count)
 
 $bySource = $results | Where-Object { $_.DateSource -ne 'None' } | Group-Object DateSource | Sort-Object Name
