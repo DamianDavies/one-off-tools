@@ -41,12 +41,18 @@ function Invoke-Az {
     return $out
 }
 
+# ALL 5 GPv1 accounts in the subscription. The GPv2 upgrade is in-place and
+# non-destructive, so migrating the two non-empty "orphans" is safe (and safer
+# than deleting them) - the infrastructure manager can decommission later if
+# they turn out to be unwanted.
 # name = GPv1 storage account ; rg = its resource group ;
-# fnApp/fnRg = the Function App that binds it (for the post-upgrade health check)
+# fnApp/fnRg = the Function App that binds it ($null if none -> health check skipped)
 $Targets = @(
-    [pscustomobject]@{ name='higctautomationa68e';     rg='higctautomation01-prod-rg'; fnApp='HigCTAutomation-prod';     fnRg='higctautomation01-prod-rg' }
-    [pscustomobject]@{ name='d365oauthtokenrg819a';    rg='d365OauthToken_rg';         fnApp='d365OauthToken';           fnRg='d365OauthToken_rg' }
-    [pscustomobject]@{ name='solutiontemplatef4fscaig'; rg='solutiontemplate-nfi14ji';  fnApp='asschedulerc6zlsc2bt37';   fnRg='SolutionTemplate-nfi14ji' }
+    [pscustomobject]@{ name='higctautomationa68e';     rg='higctautomation01-prod-rg';              fnApp='HigCTAutomation-prod';   fnRg='higctautomation01-prod-rg' }
+    [pscustomobject]@{ name='d365oauthtokenrg819a';    rg='d365OauthToken_rg';                      fnApp='d365OauthToken';         fnRg='d365OauthToken_rg' }
+    [pscustomobject]@{ name='solutiontemplatef4fscaig'; rg='solutiontemplate-nfi14ji';              fnApp='asschedulerc6zlsc2bt37'; fnRg='SolutionTemplate-nfi14ji' }
+    [pscustomobject]@{ name='higctautofunctionapp01';  rg='higctautomation01-prod-rg';              fnApp=$null;                    fnRg=$null }
+    [pscustomobject]@{ name='dyn864c5ff1e0bc49f9';     rg='DynamicsDeployments-australiasoutheast'; fnApp=$null;                    fnRg=$null }
 )
 
 Write-Host "Subscription: $SubId" -ForegroundColor Cyan
@@ -73,13 +79,13 @@ foreach ($t in $Targets) {
     }
 
     if (-not $Apply) {
-        Write-Host "  WOULD RUN: az storage account update -n $($t.name) -g $($t.rg) --upgrade-to-v2" -ForegroundColor Yellow
+        Write-Host "  WOULD RUN: az storage account update -n $($t.name) -g $($t.rg) --upgrade-to-storagev2 --yes" -ForegroundColor Yellow
         continue
     }
 
     # 2. Upgrade in place (Invoke-Az throws if az reports failure)
     Write-Host "  upgrading to GPv2..." -ForegroundColor Magenta
-    Invoke-Az @('storage','account','update','-n',$t.name,'-g',$t.rg,'--upgrade-to-v2') "upgrade $($t.name) to v2" | Out-Null
+    Invoke-Az @('storage','account','update','-n',$t.name,'-g',$t.rg,'--upgrade-to-storagev2','--yes') "upgrade $($t.name) to v2" | Out-Null
 
     # 3. Verify new kind
     $newKind = Invoke-Az @('storage','account','show','-n',$t.name,'-g',$t.rg,'--query','kind','-o','tsv') "verify kind of $($t.name)"
@@ -89,11 +95,15 @@ foreach ($t in $Targets) {
         Write-Host "  WARNING: kind is '$newKind' after upgrade - investigate." -ForegroundColor Red
     }
 
-    # 4. Bound Function App still healthy?
-    $state = Invoke-Az @('functionapp','show','-n',$t.fnApp,'-g',$t.fnRg,'--query','state','-o','tsv') "check $($t.fnApp) state"
-    Write-Host "  function app '$($t.fnApp)' state: $state"
-    if ($state -ne 'Running') {
-        Write-Host "  WARNING: function app not Running - check it." -ForegroundColor Red
+    # 4. Bound Function App still healthy? (skip if nothing is bound)
+    if ($t.fnApp) {
+        $state = Invoke-Az @('functionapp','show','-n',$t.fnApp,'-g',$t.fnRg,'--query','state','-o','tsv') "check $($t.fnApp) state"
+        Write-Host "  function app '$($t.fnApp)' state: $state"
+        if ($state -ne 'Running') {
+            Write-Host "  WARNING: function app not Running - check it." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "  (no bound Function App)" -ForegroundColor DarkGray
     }
     Write-Host ""
 }

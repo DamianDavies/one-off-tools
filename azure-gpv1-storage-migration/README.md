@@ -8,6 +8,18 @@ change) and blocks creation of new GPv1 accounts.
 Subscription in scope: **Microsoft Azure Enterprise**
 (`144944e1-e86f-4097-828c-c1eda1d015c6`) — the one named in the email.
 
+## Outcome (2026-06-12): DONE
+
+**All 5 GPv1 accounts were upgraded in place to `StorageV2` and verified — zero
+GPv1 accounts remain in the subscription.** The owner's call was to migrate
+everything (including the two non-empty "orphans") rather than spend time
+deciding what to delete; the GPv2 upgrade is non-destructive, so the
+infrastructure manager can still decommission the orphans later if unwanted.
+The 3 bound Function Apps (`HigCTAutomation-prod`, `d365OauthToken`,
+`asschedulerc6zlsc2bt37`) were `Running` immediately after the upgrade.
+
+`Remove-OrphanGpv1Storage.ps1` was **not** used — retained only as reference.
+
 ## Findings (checked 2026-06-12 with `az`)
 
 Of 19 storage accounts in the subscription, **5 are GPv1** (`Kind: Storage`).
@@ -25,15 +37,15 @@ control account that showed 29/30 active days.
 | `higctautomationa68e` | higctautomation01-prod-rg | **HigCTAutomation-prod** fn app (running) | Active 29/30 days | — | **MIGRATE** (prod) |
 | `d365oauthtokenrg819a` | d365OauthToken_rg | **d365OauthToken** fn app (running) | Bound & running | — | **MIGRATE** |
 | `solutiontemplatef4fscaig` | SolutionTemplate-nfi14ji | **asschedulerc6zlsc2bt37** fn app (running) | Bound & running | — | **MIGRATE** (or decommission whole solution — see note) |
-| `higctautofunctionapp01` | higctautomation01-prod-rg | nothing (prod app uses `…a68e`) | **0 days** | **1 blob container** (not empty) | **INSPECT then migrate-or-delete** |
-| `dyn864c5ff1e0bc49f9` | DynamicsDeployments-australiasoutheast | nothing | **0 days** | **3 blob containers** (not empty) | **INSPECT then migrate-or-delete** |
+| `higctautofunctionapp01` | higctautomation01-prod-rg | nothing (prod app uses `…a68e`) | **0 days** | **1 blob container** (not empty) | **MIGRATED** (was: inspect/delete) |
+| `dyn864c5ff1e0bc49f9` | DynamicsDeployments-australiasoutheast | nothing | **0 days** | **3 blob containers** (not empty) | **MIGRATED** (was: inspect/delete) |
 
 > **Correction (after deeper checks).** An initial 30-day, Function-App-only,
 > no-content pass labelled the bottom two accounts as safe "DELETE" orphans.
 > Hardening the delete script surfaced that this was wrong: both accounts still
 > hold blob containers (1 and 3), so they are **idle but NOT empty**. A naive
-> delete would have destroyed real containers. They are now BLOCKED pending a
-> manual look at the container contents.
+> delete would have destroyed real containers. Final decision: **migrate them
+> too** (non-destructive) rather than risk deleting live data.
 
 ### Why these decisions
 
@@ -56,7 +68,7 @@ control account that showed 29/30 active days.
 Upgrades the **3 live** accounts to GPv2. Dry-run by default (prints what it
 would do); pass `-Apply` to actually run the upgrade. For each account it:
 1. confirms the current kind is `Storage` (skips if already `StorageV2`),
-2. runs `az storage account update --upgrade-to-v2`,
+2. runs `az storage account update --upgrade-to-storagev2`,
 3. verifies the new kind is `StorageV2`, and
 4. re-checks the bound Function App is still `Running`.
 
@@ -111,27 +123,24 @@ emptiness gate (after you've manually confirmed the contents are disposable).
 > rather than a jmespath `length(@)` (the bare token goes unquoted to `cmd` and
 > breaks on the parentheses).
 
-## Open questions for the owner
+## Follow-ups for the infrastructure manager (optional, non-blocking)
 
-1. **`higctautofunctionapp01` (1 container) and `dyn864…` (3 containers).**
-   Both are idle but not empty. Look at the container contents in the portal:
-   - Disposable (old logs, stale deployment artifacts) → delete with
-     `-Apply -Force`.
-   - Anything worth keeping → migrate to GPv2 instead (add them to
-     `Migrate-Gpv1Storage.ps1`'s target list).
+The retirement is fully addressed — these are housekeeping only:
+
+1. **`higctautofunctionapp01` (1 container) and `dyn864…` (3 containers)** were
+   migrated, not deleted. If they turn out to be unwanted leftovers, they can be
+   decommissioned later (inspect contents in the portal first).
 2. **`solutiontemplatef4fscaig`** backs a marketplace "solution template"
-   scheduler Function App (`asschedulerc6zlsc2bt37`). It is running, so the safe
-   default is to migrate it. But if that whole solution is no longer wanted, the
-   better move is to decommission the app **and** its storage together rather
-   than migrate.
+   scheduler Function App (`asschedulerc6zlsc2bt37`). Now on GPv2. If that whole
+   solution is no longer wanted, decommission the app **and** its storage
+   together.
 
 ## Verification status
 
-- Read-only discovery and **dry-runs of both scripts** were executed live
+- Read-only discovery, dry-runs, and the **live migration** were executed
   against Azure on 2026-06-12.
-- `Migrate-Gpv1Storage.ps1` dry-run: clean — correctly identifies the 3 live
-  GPv1 accounts. **Not** run with `-Apply` (prod write, left for an operator).
-- `Remove-OrphanGpv1Storage.ps1` dry-run: gates work and currently **BLOCK both
-  accounts** (non-empty + queue endpoint unverifiable behind the proxy). No
-  deletion has occurred. Before any `-Apply -Force`, confirm container contents
-  in the portal.
+- `Migrate-Gpv1Storage.ps1 -Apply`: **completed successfully** — all 5 accounts
+  upgraded to `StorageV2`; the 3 bound Function Apps were `Running` afterwards.
+- Independent re-check: `az storage account list --query "[?kind=='Storage']"`
+  returns **none** — no GPv1 accounts remain.
+- `Remove-OrphanGpv1Storage.ps1` was not run (the orphans were migrated instead).
