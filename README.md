@@ -16,3 +16,4 @@ data. Override per-file with `git add -f` only when a CSV is genuinely public.
 | [`power-automate-flow-runs/`](power-automate-flow-runs/) | Pull Power Automate flow-run history for a given day (Brisbane time) via the Flow management API. |
 | [`uipath-repo-cleanup/`](uipath-repo-cleanup/) | Add a UiPath `.gitignore` to each repo under a root and untrack generated/cache files. |
 | [`jobpac-pm-mismatch-job/`](jobpac-pm-mismatch-job/) | Daily SQL Agent job: check/fix the project manager on Jobpac (DB2/400) work orders, via a linked server. |
+| [`azure-gpv1-storage-migration/`](azure-gpv1-storage-migration/) | Response to Azure GPv1 storage retirement (XTKT-BW8, 13 Oct 2026): migrate the 3 live GPv1 accounts to GPv2; the 2 "idle" accounts hold blob containers, so inspect contents then migrate-or-delete. Fail-closed dry-run scripts. |
