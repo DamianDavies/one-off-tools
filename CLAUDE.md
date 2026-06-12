@@ -1,0 +1,25 @@
+# CLAUDE.md — one-off-tools
+
+## Repo layout
+- Organise everything **by issue**: each task gets its own kebab-case subfolder
+  (scripts + a short README + data files). Keep the root to the README index and
+  `.gitignore`. Use `git mv` when relocating tracked files. CSVs are gitignored at
+  any depth — override per-file with `git add -f` only when genuinely public.
+
+## Linked servers / external systems
+- **JOBPACCONNECT** — the Jobpac **DB2/400 (IBM i)** linked server. Library
+  `JDHIGDTA01`; SQL naming (`JDHIGDTA01.TABLE`). Names starting with `#`
+  (e.g. `#SYSPSPP`) are **real DB2 tables**, not SQL Server temp tables. Read via
+  `OPENQUERY`; write via `EXEC('…') AT [JOBPACCONNECT]` in DB2 SQL (no `FROM`-clause
+  UPDATE). RPC-out is enabled.
+- **HOW** — the forms/inspections system: **MariaDB**, `cs_inform_*` / `cs_access_*`
+  tables, via the `HOW` linked server (MSDASQL ODBC) and the `HOWdbaccess` SQL
+  database. Inner `OPENQUERY` text is **MariaDB/MySQL dialect** (`curdate()`,
+  `interval`, `date_sub`), single quotes doubled.
+
+## Field Service (Dynamics 365) gotchas
+- Bookings on **placeholder resources** (`Placeholder - <city>`, `Place Holders`)
+  = **future maintenance years**, not real scheduled work — filter them out when
+  judging whether a WO is actually scheduled.
+- HOW form **`started_at` is unreliable** (mirrors last update); date forms by
+  `created_at`.

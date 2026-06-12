@@ -1,31 +1,32 @@
-# NEXT — 2026-06-11
+# NEXT — 2026-06-12
 
 ## This session
-- Shipped the **Jobpac PM-mismatch daily SQL Agent job** (commits `fe9473b`, `5dc0e72`,
-  pushed). Live on HIGDCSQL01, runs 22:00 daily; emails the mismatch set as an HTML table.
-- **Reorganised the repo into per-issue subfolders**; rewrote the root README as UTF-8.
-- **Investigated the Field Service "Risk Assessment not done" complaints (WSRA).** Root
-  cause found, reconciliation rule agreed. **Nothing built yet for WSRA.**
+- Built the **WSRA (Worksite Risk Assessment) reconciliation** in
+  `field-service-wsra-reconciliation/` (Export-WSRAs-from-HOW.sql, Match-WSRAs.ps1, README).
+- Diagnosed root cause, then validated the matcher against real exports over several
+  iterations: column-name fixes, headerless `wsras.csv`, and the key insight —
+  **placeholder-resource filtering** (bookings on `Placeholder - <city>` / `Place Holders`
+  resources = future maintenance years, not real scheduled work).
+- Ran concurrently with the azure-gpv1 session — both on `main`, isolated by folder +
+  scoped `git add` (never `-A`).
 
-## Where we got to (WSRA)
-- Flag `hig_riskassessmentcomplete` on `msdyn_workorders` is set by a Power Automate flow
-  (15-min) reading SQL view `HOWdbaccess.dbo.D365FS_WSRAs_started_yesterday`.
-- Root cause: view keys off `started_at` in a ~1-day window; in HOW `started_at` is
-  unreliable (mirrors last-update — later than `completed_at`). Plus the flow only updates
-  `@first` WO via `startswith` + stale `datewindowstart`. → permanent misses, no retry.
-- Agreed rule: set flag true if a **started** WSRA (`status <> 'NOT_STARTED'`) for the job
-  has `created_at` within **12 months before the WO's earliest non-cancelled booking** date.
+## Result (ready to apply)
+- `wsra-toupdate.csv` = **78 work orders** to set `Risk Assessment Complete = Yes`
+  (66 past/current + 12 genuinely future-booked). All have WO GUIDs; zero duplicates.
+- Buckets: 78 ToSetTrue, 806 NotScheduled (placeholder-only), 20 Expired, 47 NoWSRA,
+  1062 Unscheduled.
 
-## Next to pick up
-1. Run the HOW wide-lookback export query (in last assistant msg) — confirms job-code shape
-   (e.g. `JM0075` vs `JM0075A`) before committing match logic.
-2. Build offline matcher in new `field-service-wsra-reconciliation/` (mirror Site File):
-   inputs = HOW WSRAs + WO export + bookings; outputs = ToSetTrue / NoValidWSRA / Expired /
-   NoBookingDate. Then bulk-set via Edit-in-Excel.
+## Next — user doing MONDAY
+1. Bulk-set the 78: Dynamics view of those WOs → Export to Excel → Edit in Excel →
+   `Risk Assessment Complete = Yes` → Publish.
+2. Re-run the `RA Complete = No` view to confirm they drop off.
+3. Spot-check the 20 `Expired` (likely need a fresh WSRA, not a flag flip).
+4. Confirm multi-WO jobs (EM1020 B/C/D, MM3652, PM7637) are all meant to be flagged.
 
-## Open questions / caveats
-- Matching rule + bucket scheme proposed but **not yet confirmed** by you.
-- Assumed `created_at` (not `completed_at`) as the WSRA timeline date.
-- PCR (ZC0509) and Site File are separate sibling flows — handle after WSRA.
-- All 6 reported jobs confirmed to have started WSRAs in HOW but flag = false (diagnosis
-  sound), but **no flags have been set** and no D365/HOW data pulled by me — handed to you.
+## Open / caveats
+- Validated against real data but **no flags set in production yet**.
+- Column-name + 6-char-job-code assumptions hold for *this* export format; re-check if it changes.
+- One-off backlog clear only — the **Power Automate flow/view still has the bugs**
+  (`started_at` / 1-day window / matching) and will keep missing. Durable fix = separate piece.
+- **ZC0509** was a **PCR** complaint (separate sibling flow), not WSRA — not handled here.
+- Original 6 jobs: JM0075/QM8915/ZC0479 are in the 78; QR6800/QR6801 already Yes.
