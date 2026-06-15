@@ -21,5 +21,6 @@
 - Bookings on **placeholder resources** (`Placeholder - <city>`, `Place Holders`)
   = **future maintenance years**, not real scheduled work — filter them out when
   judging whether a WO is actually scheduled.
-- HOW form **`started_at` is unreliable** (mirrors last update); date forms by
-  `created_at`.
+- HOW form **`started_at` is unreliable**: it mirrors the last update, and
+  **same-session create+complete forms get no `started_at` at all** (a HOW bug).
+  Date forms by `created_at`.

@@ -1,35 +1,24 @@
-# NEXT — 2026-06-12
+# NEXT — 2026-06-15
 
-## This session
-- Built the **WSRA (Worksite Risk Assessment) reconciliation** in
-  `field-service-wsra-reconciliation/` (Export-WSRAs-from-HOW.sql, Match-WSRAs.ps1, README).
-- Diagnosed root cause, then validated the matcher against real exports over several
-  iterations: column-name fixes, headerless `wsras.csv`, and the key insight —
-  **placeholder-resource filtering** (bookings on `Placeholder - <city>` / `Place Holders`
-  resources = future maintenance years, not real scheduled work).
-- Ran concurrently with the azure-gpv1 session — both on `main`, isolated by folder +
-  scoped `git add` (never `-A`).
+## WSRA reconciliation — COMPLETE ✅
+- Applied the 78-row backlog (`Risk Assessment Complete = Yes`) and **verified**: all 78
+  dropped out of the fresh post-fix `RA = No` export (0 remaining).
+- Root cause was already fixed at source: the HOW view `D365FS_WSRAs_started_yesterday`
+  was changed **2026-05-28** (confirmed via `sys.objects.modify_date`) to fall back to
+  `created_at` when a same-session create+complete form gets no `started_at` (a HOW bug).
+  Clean June confirms it's working — the 78 were pure pre-fix backlog.
+- Reported jobs: JM0075 / QM8915 / ZC0479 fixed via the backlog; QR6800 / QR6801 had
+  already self-resolved. QM8915B–F correctly stay `No` — future maintenance years
+  (placeholder bookings 2027–2031, not due; their `Date Window Start` is a stale 2026
+  default, which is why we date WOs off the booking resource, not that field).
 
-## Result (ready to apply)
-- `wsra-toupdate.csv` = **78 work orders** to set `Risk Assessment Complete = Yes`
-  (66 past/current + 12 genuinely future-booked). All have WO GUIDs; zero duplicates.
-- Buckets: 78 ToSetTrue, 806 NotScheduled (placeholder-only), 20 Expired, 47 NoWSRA,
-  1062 Unscheduled.
+## Nothing outstanding
+- No recurring re-run, no durable fix, no event-driven redesign needed.
+- `field-service-wsra-reconciliation/` remains as a reusable matcher if a backlog ever
+  recurs (e.g. the HOW view regresses). Re-export fresh `wsras.csv` / `wos.csv` (RA=No) /
+  `bookings.csv` before any re-run; column-name + 6-char-job-code assumptions hold for the
+  current export format.
 
-## Next — user doing MONDAY
-1. Bulk-set the 78: Dynamics view of those WOs → Export to Excel → Edit in Excel →
-   `Risk Assessment Complete = Yes` → Publish.
-2. Re-run the `RA Complete = No` view to confirm they drop off.
-3. Spot-check the 20 `Expired` (likely need a fresh WSRA, not a flag flip).
-4. Confirm multi-WO jobs (EM1020 B/C/D, MM3652, PM7637) are all meant to be flagged.
-
-## Open / caveats
-- Validated against real data but **no flags set in production yet**.
-- Column-name + 6-char-job-code assumptions hold for *this* export format; re-check if it changes.
-- **Root cause fixed at source on 2026-05-28** (confirmed via `sys.objects.modify_date`):
-  the HOW view `D365FS_WSRAs_started_yesterday` now falls back to `created_at` when a
-  same-session create+complete form has no `started_at` (a HOW bug). Misses stop dead at
-  end-May, matching the fix date. So the 78 are **pre-fix backlog → one-time clear**; no
-  recurring re-run and no durable fix needed.
-- **ZC0509** was a **PCR** complaint (separate sibling flow), not WSRA — not handled here.
-- Original 6 jobs: JM0075/QM8915/ZC0479 are in the 78; QR6800/QR6801 already Yes.
+## Other repo items (other sessions, already closed)
+- `azure-gpv1-storage-migration` — done 2026-06-12.
+- `sentinel-sourcecontrol-api-retirement` — no action required (investigation only).
