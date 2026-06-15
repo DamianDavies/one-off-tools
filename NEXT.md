@@ -26,7 +26,10 @@
 ## Open / caveats
 - Validated against real data but **no flags set in production yet**.
 - Column-name + 6-char-job-code assumptions hold for *this* export format; re-check if it changes.
-- One-off backlog clear only — the **Power Automate flow/view still has the bugs**
-  (`started_at` / 1-day window / matching) and will keep missing. Durable fix = separate piece.
+- **Root cause fixed at source on 2026-05-28** (confirmed via `sys.objects.modify_date`):
+  the HOW view `D365FS_WSRAs_started_yesterday` now falls back to `created_at` when a
+  same-session create+complete form has no `started_at` (a HOW bug). Misses stop dead at
+  end-May, matching the fix date. So the 78 are **pre-fix backlog → one-time clear**; no
+  recurring re-run and no durable fix needed.
 - **ZC0509** was a **PCR** complaint (separate sibling flow), not WSRA — not handled here.
 - Original 6 jobs: JM0075/QM8915/ZC0479 are in the 78; QR6800/QR6801 already Yes.
