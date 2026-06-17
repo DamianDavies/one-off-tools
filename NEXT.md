@@ -1,23 +1,28 @@
 # NEXT — 2026-06-15
 
-## WSRA reconciliation — COMPLETE ✅
-- Applied the 78-row backlog (`Risk Assessment Complete = Yes`) and **verified**: all 78
-  dropped out of the fresh post-fix `RA = No` export (0 remaining).
-- Root cause was already fixed at source: the HOW view `D365FS_WSRAs_started_yesterday`
-  was changed **2026-05-28** (confirmed via `sys.objects.modify_date`) to fall back to
-  `created_at` when a same-session create+complete form gets no `started_at` (a HOW bug).
-  Clean June confirms it's working — the 78 were pure pre-fix backlog.
-- Reported jobs: JM0075 / QM8915 / ZC0479 fixed via the backlog; QR6800 / QR6801 had
-  already self-resolved. QM8915B–F correctly stay `No` — future maintenance years
-  (placeholder bookings 2027–2031, not due; their `Date Window Start` is a stale 2026
-  default, which is why we date WOs off the booking resource, not that field).
+## WSRA — backlog cleared ✅, but flow matching bug still OPEN ⚠️
+- **Backlog done & verified:** applied the 78-row clean-up (`Risk Assessment Complete =
+  Yes`); all 78 dropped out of the fresh post-fix `RA = No` export (0 remaining).
+- **Only half the root cause was fixed.** The 28 May 2026 view change (`created_at`
+  fallback for HOW's same-session no-`started_at` bug) fixed **single-WO jobs**. The
+  **flow's `@first` WO-matching is still broken for multi-WO (maintenance) jobs** — it
+  lists matches in default order and flags `@first`, hitting the wrong WO.
+- **Live proof, 15 Jun:** QM8897 WSRA done 07:51 → flow flagged **QM8897E** (a 2035
+  placeholder) and left **QM8897A** (the real current WO) at `No`. Two defects: false
+  negative (A) + false positive (E).
 
-## Nothing outstanding
-- No recurring re-run, no durable fix, no event-driven redesign needed.
-- `field-service-wsra-reconciliation/` remains as a reusable matcher if a backlog ever
-  recurs (e.g. the HOW view regresses). Re-export fresh `wsras.csv` / `wos.csv` (RA=No) /
-  `bookings.csv` before any re-run; column-name + 6-char-job-code assumptions hold for the
-  current export format.
+## Still open
+1. **Apply the flow fix** — set List-rows-Work-Orders `Order By = msdyn_name asc`, keep
+   `@first` (current year = lowest *open* suffix; past years closed/excluded; placeholders
+   are higher suffixes). Written up: `field-service-wsra-reconciliation/flow-matching-fix.md`.
+   Verify closed past-years really are excluded (else add `statecode eq 0`).
+2. **Manual cleanup now:** QM8897A → Yes; QM8897E → back to No.
+- Reusable matcher (`field-service-wsra-reconciliation/`) stays for any future backlog;
+  re-export fresh CSVs before a re-run.
+
+## Reference
+- Reported jobs: JM0075 / QM8915 / ZC0479 fixed via backlog; QR6800 / QR6801 self-resolved.
+  QM8915B–F correctly stay `No` (future placeholder years).
 
 ## Other repo items (other sessions, already closed)
 - `azure-gpv1-storage-migration` — done 2026-06-12.
