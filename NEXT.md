@@ -15,14 +15,11 @@
   same `@first`-on-unsorted-ListRecords bug, and all three now have `$orderby = msdyn_name`
   (asc) **live** (verified 2026-06-17 via the Flow API: orderby present, last-modified moved).
 
-## Loose ends
-- The `$orderby` fix stops *new* mis-flags only. Each flow may carry a **pre-fix backlog**
-  (real WO left `No` + a placeholder wrongly `Yes`). Site File false-negatives are covered
-  by `site-file-shared-reconciliation/`; the placeholder **false-positives** (across all
-  three) are unswept — sweep if/when they cause noise.
-- **QM8897 cleanup:** confirm **QM8897A = Yes**, set **QM8897E → No** (placeholder the old
-  flow wrongly flagged; the fix won't un-flag it).
-- Reusable matchers stay for any future backlog.
+## Closed out — nothing outstanding
+- **QM8897 cleanup done:** QM8897A = Yes, QM8897E = No.
+- **Placeholder false-positives checked — all clear** (no pre-fix mis-flags to sweep).
+- Reusable matchers (`field-service-wsra-reconciliation/`, `site-file-shared-reconciliation/`)
+  stay available if a future backlog ever arises.
 
 ## Reference
 - Reported jobs: JM0075 / QM8915 / ZC0479 fixed via backlog; QR6800 / QR6801 self-resolved.
