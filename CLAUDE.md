@@ -24,3 +24,8 @@
 - HOW form **`started_at` is unreliable**: it mirrors the last update, and
   **same-session create+complete forms get no `started_at` at all** (a HOW bug).
   Date forms by `created_at`.
+- The three "Scheduled 15 mins" check flows (**WSRA / Site File Sharing / PCR**) each set
+  their WO completion flag by listing WOs `startswith(msdyn_name, <jobcode>)` and updating
+  `@first(...)`. The ListRecords step **must** be `$orderby=msdyn_name` (asc) or `@first`
+  lands on the wrong WO for multi-WO maintenance jobs (flags a future placeholder, leaves
+  the real one). Don't filter on `hig_assessedhours` — unreliably populated.

@@ -1,24 +1,28 @@
 # NEXT — 2026-06-15
 
-## WSRA — backlog cleared ✅, but flow matching bug still OPEN ⚠️
-- **Backlog done & verified:** applied the 78-row clean-up (`Risk Assessment Complete =
-  Yes`); all 78 dropped out of the fresh post-fix `RA = No` export (0 remaining).
-- **Only half the root cause was fixed.** The 28 May 2026 view change (`created_at`
-  fallback for HOW's same-session no-`started_at` bug) fixed **single-WO jobs**. The
-  **flow's `@first` WO-matching is still broken for multi-WO (maintenance) jobs** — it
-  lists matches in default order and flags `@first`, hitting the wrong WO.
-- **Live proof, 15 Jun:** QM8897 WSRA done 07:51 → flow flagged **QM8897E** (a 2035
-  placeholder) and left **QM8897A** (the real current WO) at `No`. Two defects: false
-  negative (A) + false positive (E).
+## WSRA — RESOLVED ✅
+- **Backlog cleared & verified:** the 78-row clean-up applied; all 78 dropped out of the
+  fresh post-fix `RA = No` export (0 remaining).
+- **Both halves of the root cause now fixed:**
+  - *View* (28 May 2026): `created_at` fallback for HOW's same-session no-`started_at` bug
+    — fixed single-WO jobs.
+  - *Flow* (15 Jun 2026): added `$orderby = msdyn_name` (asc) to List-rows-Work-Orders so
+    `@first` lands on the current WO (lowest open suffix) not a future placeholder —
+    fixed multi-WO maintenance jobs. **Verified working.** See `flow-matching-fix.md`.
 
-## Still open
-1. **Apply the flow fix** — set List-rows-Work-Orders `Order By = msdyn_name asc`, keep
-   `@first` (current year = lowest *open* suffix; past years closed/excluded; placeholders
-   are higher suffixes). Written up: `field-service-wsra-reconciliation/flow-matching-fix.md`.
-   Verify closed past-years really are excluded (else add `statecode eq 0`).
-2. **Manual cleanup now:** QM8897A → Yes; QM8897E → back to No.
-- Reusable matcher (`field-service-wsra-reconciliation/`) stays for any future backlog;
-  re-export fresh CSVs before a re-run.
+## Sibling flows — all fixed ✅
+- All three "Scheduled 15 mins" check flows — **WSRA, Site File Sharing, PCR** — had the
+  same `@first`-on-unsorted-ListRecords bug, and all three now have `$orderby = msdyn_name`
+  (asc) **live** (verified 2026-06-17 via the Flow API: orderby present, last-modified moved).
+
+## Loose ends
+- The `$orderby` fix stops *new* mis-flags only. Each flow may carry a **pre-fix backlog**
+  (real WO left `No` + a placeholder wrongly `Yes`). Site File false-negatives are covered
+  by `site-file-shared-reconciliation/`; the placeholder **false-positives** (across all
+  three) are unswept — sweep if/when they cause noise.
+- **QM8897 cleanup:** confirm **QM8897A = Yes**, set **QM8897E → No** (placeholder the old
+  flow wrongly flagged; the fix won't un-flag it).
+- Reusable matchers stay for any future backlog.
 
 ## Reference
 - Reported jobs: JM0075 / QM8915 / ZC0479 fixed via backlog; QR6800 / QR6801 self-resolved.

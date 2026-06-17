@@ -1,6 +1,9 @@
 # Flow fix — WSRA flag lands on the wrong work order (multi-WO jobs)
 
-**Status:** hand-back — review and apply in the production flow yourself. Nothing applied by Claude.
+**Status:** ✅ Applied & verified 2026-06-17 — `$orderby = msdyn_name` (ascending) added to
+the List-rows-Work-Orders step on **all three sibling flows** (WSRA `fd3f6c3d`, Site File
+Sharing `09f39d25`, PCR `0a93a4eb`); `@first` now lands on the current WO. Verified live via
+the Flow API ($orderby present, last-modified moved to publish time).
 
 ## Defect
 
